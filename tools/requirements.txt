@@ -1,0 +1,5 @@
+# Install with a regular CPython runtime; the pipeline invokes PathOps in an
+# isolated helper because FontForge's bundled Python uses a different ABI.
+# python -m pip install --target .font-deps -r tools/requirements.txt
+fonttools[pathops]==4.63.0
+skia-pathops==0.9.2
