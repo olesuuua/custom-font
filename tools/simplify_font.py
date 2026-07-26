@@ -443,35 +443,64 @@ def minimum_region_pixels(size):
 
 def count_regions(mask, size, filled):
     target = 1 if filled else 0
-    values = [1 if value >= 0.5 else 0 for value in mask]
-    seen = bytearray(size * size)
-    regions = 0
-    border_regions = 0
-    for start in range(size * size):
-        if seen[start] or values[start] != target:
-            continue
-        regions += 1
-        stack = [start]
-        seen[start] = 1
-        touches_border = False
-        region_size = 0
-        while stack:
-            current = stack.pop()
-            region_size += 1
-            row, column = divmod(current, size)
-            if row == 0 or column == 0 or row == size - 1 or column == size - 1:
-                touches_border = True
-            for next_row, next_column in ((row - 1, column), (row + 1, column), (row, column - 1), (row, column + 1)):
-                if 0 <= next_row < size and 0 <= next_column < size:
-                    next_index = next_row * size + next_column
-                    if not seen[next_index] and values[next_index] == target:
-                        seen[next_index] = 1
-                        stack.append(next_index)
-        if region_size < minimum_region_pixels(size):
-            regions -= 1
-        elif touches_border:
-            border_regions += 1
-    return regions, border_regions
+    # Run-length connected components are equivalent to the previous
+    # four-neighbour pixel flood fill, but avoid allocating and walking a
+    # million-element graph for every 1024 px topology check.
+    parents = []
+    areas = []
+    borders = []
+
+    def find(value):
+        while parents[value] != value:
+            parents[value] = parents[parents[value]]
+            value = parents[value]
+        return value
+
+    def union(left, right):
+        left, right = find(left), find(right)
+        if left == right:
+            return left
+        if areas[left] < areas[right]:
+            left, right = right, left
+        parents[right] = left
+        areas[left] += areas[right]
+        borders[left] = borders[left] or borders[right]
+        return left
+
+    previous = []
+    for row in range(size):
+        runs = []
+        offset = row * size
+        column = 0
+        while column < size:
+            value = 1 if mask[offset + column] >= 0.5 else 0
+            if value != target:
+                column += 1
+                continue
+            start = column
+            column += 1
+            while column < size and (1 if mask[offset + column] >= 0.5 else 0) == target:
+                column += 1
+            end = column - 1
+            identifier = len(parents)
+            parents.append(identifier)
+            areas.append(end - start + 1)
+            borders.append(row == 0 or row == size - 1 or start == 0 or end == size - 1)
+            runs.append([start, end, identifier])
+        prior_index = 0
+        for run in runs:
+            while prior_index < len(previous) and previous[prior_index][1] < run[0]:
+                prior_index += 1
+            scan = prior_index
+            while scan < len(previous) and previous[scan][0] <= run[1]:
+                run[2] = union(run[2], previous[scan][2])
+                scan += 1
+        previous = runs
+
+    threshold = minimum_region_pixels(size)
+    roots = {find(index) for index in range(len(parents))}
+    valid = [root for root in roots if areas[root] >= threshold]
+    return len(valid), sum(1 for root in valid if borders[root])
 
 
 def topology(mask, size=RASTER_SIZE):
