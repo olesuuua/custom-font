@@ -1,3 +1,6 @@
 .font-deps/
 tools/__pycache__/
-
+*.log
+checkpoints/*-work/
+qa/*-work/
+qa/bold-v4-percent-union/
