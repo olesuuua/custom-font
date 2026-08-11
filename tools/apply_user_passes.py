@@ -72,7 +72,7 @@ def main() -> int:
                 "regular_hash": row["regular_hash"],
                 "base_hash": row["base_hash"],
                 "bold_hash": row["bold_hash"],
-                "metrics_version": "bold-metrics-v4.1",
+                "metrics_version": "bold-metrics-v6",
                 "updated_at": timestamp,
                 "manual_override": True,
                 "override_reason": "explicit-user-visual-approval-2026-07-29",

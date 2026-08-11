@@ -1,0 +1,51 @@
+{
+  "version": "bold-v5-batch2-manifest-v2",
+  "batch": 2,
+  "maximum_glyphs": 8,
+  "source_sha256": "3c45ef426f40f1f7e741e5567cf1a7da37bc165f39c83401adf9d62b59e290d6",
+  "regular_sha256": "5f0c82491cb499a1eec606c905b449129a48479703b12d5d0c56152d68fba418",
+  "base_sha256": "9559efcd3007580146ed089a5eec3c4dd76ffd04c64c9d99445fff0d7bdb62e2",
+  "raw_sha256": "0fb4b970ce0a904eee82e6355bd4d9cf4132294858c0d6d9e2566232a5bcefd1",
+  "glyphs": [
+    {
+      "glyph": "uni2010",
+      "codepoint": "U+2010",
+      "method": "preserve-original-width-add-vertical-weight-to-existing-bold-silhouette"
+    },
+    {
+      "glyph": "quoteleft",
+      "codepoint": "U+2018",
+      "method": "affine-weight-expansion-of-original-regular"
+    },
+    {
+      "glyph": "quoteright",
+      "codepoint": "U+2019",
+      "method": "affine-weight-expansion-of-original-regular"
+    },
+    {
+      "glyph": "quotesinglbase",
+      "codepoint": "U+201A",
+      "method": "affine-weight-expansion-of-original-regular"
+    },
+    {
+      "glyph": "quotereversed",
+      "codepoint": "U+201B",
+      "method": "affine-weight-expansion-of-original-regular"
+    },
+    {
+      "glyph": "quotedblleft",
+      "codepoint": "U+201C",
+      "method": "per-component-affine-weight-expansion-of-original-regular"
+    },
+    {
+      "glyph": "quotedblright",
+      "codepoint": "U+201D",
+      "method": "per-component-affine-weight-expansion-of-original-regular"
+    },
+    {
+      "glyph": "quotedblbase",
+      "codepoint": "U+201E",
+      "method": "per-component-affine-weight-expansion-of-original-regular"
+    }
+  ]
+}

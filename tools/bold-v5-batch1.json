@@ -1,0 +1,69 @@
+{
+  "version": "bold-v5-batch-manifest-v1",
+  "batch": 1,
+  "source": "fontforge/bold.sfd",
+  "source_sha256": "fc6f2fa0bfa4d135813136a85d8c6975b9ac06d4a3eb1732ad209b0fae0406cb",
+  "regular_sha256": "5f0c82491cb499a1eec606c905b449129a48479703b12d5d0c56152d68fba418",
+  "base_sha256": "9559efcd3007580146ed089a5eec3c4dd76ffd04c64c9d99445fff0d7bdb62e2",
+  "raw_sha256": "0fb4b970ce0a904eee82e6355bd4d9cf4132294858c0d6d9e2566232a5bcefd1",
+  "maximum_glyphs": 8,
+  "glyphs": [
+    {
+      "glyph": "brokenbar",
+      "codepoint": "U+00A6",
+      "method": "pilot-pathops-short-segment-refit",
+      "donor_source": "fontforge/bold-v5-pilot-manual.sfd",
+      "local_repair_region": [55, 604, 57, 607]
+    },
+    {
+      "glyph": "dagger",
+      "codepoint": "U+2020",
+      "method": "accepted-pilot-pathops",
+      "donor_source": "fontforge/bold-v5-pilot.sfd",
+      "local_repair_region": null
+    },
+    {
+      "glyph": "uni042F",
+      "codepoint": "U+042F",
+      "method": "local-terminal-tangent-refit",
+      "donor_source": "fontforge/bold.sfd",
+      "local_repair_region": [559, 212, 614, 289]
+    },
+    {
+      "glyph": "uni2010",
+      "codepoint": "U+2010",
+      "method": "local-lower-edge-indent-fill",
+      "donor_source": "fontforge/bold.sfd",
+      "local_repair_region": [179, 246, 308, 276]
+    },
+    {
+      "glyph": "two",
+      "codepoint": "U+0032",
+      "method": "local-rounded-terminal-refit",
+      "donor_source": "fontforge/bold.sfd",
+      "local_repair_region": [438, 3, 523, 148]
+    },
+    {
+      "glyph": "minute",
+      "codepoint": "U+2032",
+      "method": "local-prime-terminal-refit",
+      "donor_source": "fontforge/bold.sfd",
+      "local_repair_region": [41, -60, 58, -43]
+    },
+    {
+      "glyph": "second",
+      "codepoint": "U+2033",
+      "method": "family-copy-from-minute",
+      "donor_source": "batch1:minute",
+      "family_template": "minute",
+      "local_repair_region": [18, -73, 232, 121]
+    },
+    {
+      "glyph": "uni21BA",
+      "codepoint": "U+21BA",
+      "method": "local-lower-arc-indent-fill",
+      "donor_source": "fontforge/bold.sfd",
+      "local_repair_region": [304, 24, 342, 39]
+    }
+  ]
+}

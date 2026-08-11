@@ -34,8 +34,8 @@ if ($health) {
     if ($health.project -ne 'olesuas-hand-bold-qa') {
         throw "Port $Port is serving another application. Nothing was stopped."
     }
-    if ($health.server_version -eq 'OlesuasQA/4.1' -and $health.metrics_version -eq 'bold-metrics-v4.1') {
-        Write-Host "Bold QA v4.1 is already running at http://127.0.0.1:$Port/"
+    if ($health.server_version -eq 'OlesuasQA/6' -and $health.metrics_version -eq 'bold-metrics-v6') {
+        Write-Host "Bold QA v6 is already running at http://127.0.0.1:$Port/"
         exit 0
     }
     if (-not $ReplaceProjectServer) {
@@ -81,8 +81,8 @@ $startInfo.CreateNoWindow = $true
 for ($attempt = 0; $attempt -lt 20; $attempt++) {
     Start-Sleep -Milliseconds 250
     $health = Get-QaHealth
-    if ($health -and $health.server_version -eq 'OlesuasQA/4.1' -and $health.metrics_version -eq 'bold-metrics-v4.1') {
-        Write-Host "Bold QA v4.1 started at http://127.0.0.1:$Port/"
+    if ($health -and $health.server_version -eq 'OlesuasQA/6' -and $health.metrics_version -eq 'bold-metrics-v6') {
+        Write-Host "Bold QA v6 started at http://127.0.0.1:$Port/"
         exit 0
     }
 }

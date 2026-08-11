@@ -24,7 +24,7 @@ CONFIGS = {
         "report": QA_ROOT / "assets" / "bold-report.csv",
         "meta": QA_ROOT / "assets" / "bold-report.json",
         "decisions": QA_ROOT / "bold-manual-decisions.json",
-        "version": "bold-manual-review-v4.1",
+        "version": "bold-manual-review-v6",
         "source_key": "regular_hash", "candidate_key": "bold_hash",
     },
 }
@@ -56,7 +56,7 @@ def atomic_write(mode, value):
         if os.path.exists(temporary): os.unlink(temporary)
 
 class ReviewHandler(SimpleHTTPRequestHandler):
-    server_version = "OlesuasQA/4.1"
+    server_version = "OlesuasQA/6"
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(QA_ROOT), **kwargs)
     def send_json(self, status, value):
@@ -114,7 +114,7 @@ class ReviewHandler(SimpleHTTPRequestHandler):
         decision={"status": status, config["source_key"]: row[config["source_key"]], config["candidate_key"]: row[config["candidate_key"]], "updated_at": datetime.now(timezone.utc).isoformat()}
         if mode == "bold":
             decision["base_hash"] = row["base_hash"]
-            decision["metrics_version"] = "bold-metrics-v4.1"
+            decision["metrics_version"] = "bold-metrics-v6"
         values["decisions"][glyph]=decision; atomic_write(mode, values)
         self.send_json(200, {"glyph": glyph, **decision})
     def do_DELETE(self):

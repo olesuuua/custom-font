@@ -8,7 +8,7 @@ import fontforge
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 import redraw_font as rf
-REGULAR=ROOT/'fontforge'/'redrawn.sfd'; BOLD=ROOT/'fontforge'/'bold.sfd'
+REGULAR=ROOT/'fontforge'/'redrawn.sfd'; BASE=ROOT/'fontforge'/'regular-bold-base.sfd'; BOLD=ROOT/'fontforge'/'bold-v6.sfd'
 REPORT=ROOT/'qa'/'assets'/'bold-report.csv'; META=ROOT/'qa'/'assets'/'bold-report.json'
 DECISIONS=ROOT/'qa'/'bold-manual-decisions.json'; CHECKPOINT=ROOT/'checkpoints'/'bold-v1'
 
@@ -25,7 +25,7 @@ def main():
   if not path.is_file(): errors.append('missing '+str(path))
  if errors:
   print('\n'.join(errors)); return 1
- r=fontforge.open(str(REGULAR)); b=fontforge.open(str(BOLD))
+ r=fontforge.open(str(REGULAR)); base=fontforge.open(str(BASE)); b=fontforge.open(str(BOLD))
  try:
   rg=list(r.glyphs()); bg={g.glyphname:g for g in b.glyphs()}
   if len(rg)!=340 or len(bg)!=340: errors.append('expected 340 glyphs')
@@ -39,16 +39,16 @@ def main():
    if bool(count(g.foreground))!=bool(count(other.foreground)): errors.append(g.glyphname+' empty state differs')
   if (r.fontname,r.fullname,r.weight,r.os2_weight,r.os2_stylemap,r.macstyle,r.version)!=('OlesuasHand-Regular','Olesuas Hand Regular','Regular',400,64,0,'001.001'):
    errors.append('Regular metadata differs')
-  if (b.fontname,b.fullname,b.weight,b.os2_weight,b.os2_stylemap,b.macstyle,b.version)!=('OlesuasHand-Bold','Olesuas Hand Bold','Bold',700,32,1,'001.001'):
+  if (b.fontname,b.fullname,b.weight,b.os2_weight,b.os2_stylemap,b.macstyle,b.version)!=('OlesuasHand-Bold','Olesuas Hand Bold','Bold',700,32,1,'1.003'):
    errors.append('Bold metadata differs')
   if len(r.gpos_lookups)!=len(b.gpos_lookups) or len(r.gsub_lookups)!=len(b.gsub_lookups): errors.append('OpenType lookup coverage differs')
   rows=list(csv.DictReader(REPORT.open(encoding='utf-8-sig',newline='')))
   if len(rows)!=340: errors.append('report does not contain 340 rows')
   for row in rows:
-   rglyph=r[row['glyph']]; bglyph=b[row['glyph']]
+   rglyph=r[row['glyph']]; baseglyph=base[row['glyph']]; bglyph=b[row['glyph']]
    if row['regular_hash']!=rf.layer_hash(rglyph.foreground): errors.append(row['glyph']+' regular hash stale')
    if row['bold_hash']!=rf.layer_hash(bglyph.foreground): errors.append(row['glyph']+' bold hash stale')
-   if int(row['regular_points'])!=count(rglyph.foreground) or int(row['bold_points'])!=count(bglyph.foreground): errors.append(row['glyph']+' point report stale')
+   if int(row['regular_points'])!=count(baseglyph.foreground) or int(row['bold_points'])!=count(bglyph.foreground): errors.append(row['glyph']+' point report stale')
   meta=json.loads(META.read_text(encoding='utf-8'))
   if meta['regular_sfd_hash']!=digest(REGULAR) or meta['bold_sfd_hash']!=digest(BOLD): errors.append('report metadata hashes stale')
   decisions=json.loads(DECISIONS.read_text(encoding='utf-8-sig'))
@@ -57,7 +57,7 @@ def main():
    row=by_name.get(name)
    if not row or value.get('regular_hash')!=row['regular_hash'] or value.get('bold_hash')!=row['bold_hash'] or value.get('metrics_version')!=meta['version']: errors.append(name+' decision is stale')
  finally:
-  r.close(); b.close()
+  r.close(); base.close(); b.close()
  manifest=json.loads((CHECKPOINT/'manifest.json').read_text(encoding='utf-8'))
  for name,expected in manifest.get('artifact_hashes',{}).items():
   path=CHECKPOINT/name

@@ -7,37 +7,38 @@ A custom handwritten font family with a reviewed Regular source and an independe
 - `fontforge/redrawn.sfd` — authoritative updated Regular source (weight 400; never cleaned in place)
 - `fontforge/regular-bold-base.sfd` — overlap-cleaned copy used only as the Bold source
 - `fontforge/bold-raw.sfd` — untouched +40 diagnostic
-- `fontforge/bold.sfd` — repaired, manually editable Bold source
-- `qa/assets/redrawn.ttf`, `regular-bold-base.ttf`, `bold-raw.ttf`, and `bold.ttf` — derived QA builds
+- `fontforge/bold.sfd` — approved Bold 1.002 source; unchanged while v6 is reviewed
+- `fontforge/bold-v6.sfd` — complete accumulated Bold v6 candidate (version 1.003)
+- `qa/assets/redrawn.ttf` and `bold-v6.ttf` — active Regular/Bold v6 QA builds
 - `checkpoints/bold-v2-reviewed/` — preserved reviewed Bold v2 and its decisions
 - `checkpoints/bold-v3-reviewed/` — preserved fully reviewed Bold v3 and its decisions
 - `checkpoints/bold-v4/` — frozen verified Bold v4 sources, reports, decisions, and settings
 
 The family contains 340 serialized glyphs: 334 outlined glyphs and six empty/control glyphs.
 
-## Normal Bold editing and review cycle
+## Bold v6 editing and review cycle
 
-After editing and saving `fontforge/bold.sfd` in FontForge, regenerate only the TTFs and QA report. This command never overwrites either the authoritative Regular, the cleaned base, or `bold.sfd`:
+Bold v6 is one complete 340-glyph candidate, not a set of visible batches. Rebuild the candidate and its active QA report with:
 
 ```powershell
+& 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\build_bold_v6.py --force
 & 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\refresh_bold_qa.py
+python tools\migrate_bold_v6_decisions.py
 ```
 
-Start the guarded local review server:
+Start the guarded local review server with `./tools/start_bold_qa.ps1`, using `-ReplaceProjectServer` when it identifies an older server from this project. Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+The page shows only untouched Regular, current full Bold v6, and an optional overlay. Search, review state, glyph category, and the compact issue filter remain available. Historical raw, base, pilot, and batch fonts are retained only in checkpoints and are not loaded by the active page.
+
+Decisions are written atomically to `qa/bold-manual-decisions.json`. Every glyph whose v6 outline differs from approved Bold 1.002 is removed from the active decision document and appears Unreviewed, regardless of its earlier state. Unchanged glyph decisions remain hash-bound and valid. A glyph changed again in a later full revision resets to Unreviewed again.
+
+Freeze the active full revision with `python tools/freeze_bold_v6.py --revision revision-NN-name`. Run the full verifier with:
 
 ```powershell
-.\tools\start_bold_qa.ps1
+& 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\verify_bold_v6.py
 ```
 
-If the launcher identifies an older server from this same project, replace it explicitly with `-ReplaceProjectServer`. It refuses to stop unrelated listeners.
-
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000). If an older server is already running, stop it before starting this command so the v4.1 decision rules are loaded.
-
-The default page compares untouched Regular with final Bold. “Cleaned base” adds the overlap-cleaned Regular, and “Show raw Bold” switches the Bold panel to the original +40 diagnostic. The archived redraw review remains at `/redraw.html`.
-
-The Bold page supports Pass, Almost Done, Needs Complete Rework, Unreviewed, and the derived Ready to Pass queue. Decisions are stored atomically in `qa/bold-manual-decisions.json` and bind the Regular, cleaned-base, Bold, and metrics hashes. A changed outline invalidates only its own decision. Ready to Pass never automatically promotes a glyph; it presents qualifying repaired Almost Done glyphs for one-click confirmation.
-
-Intentional filled counters are permitted for `asterisk`, `uni041D`, `uni0427`, and `uni043D`, plus strictly tiny invisible holes. Bold-only white regions that do not match a visible Regular counter are removed. Real current outline, component, and required-counter defects still block Pass.
+Intentional filled counters remain permitted for `asterisk`, `uni041D`, `uni0427`, and `uni043D`. Current structural, component, and required-counter defects still block Pass.
 
 ## Bold v4.1 triage
 
@@ -46,6 +47,34 @@ Bold v4.1 keeps all SFD sources unchanged, replaces the generic counter/componen
 ## Bold v5 pilot
 
 The isolated pilot is built from `checkpoints/bold-v4/bold.sfd`; it never overwrites `fontforge/bold.sfd`. The QA page can preview the accepted pilot and the rejected manual alternatives. Review controls are disabled in preview modes so decisions remain bound to final Bold. Rebuild intentionally with `ffpython tools\build_bold_pilot.py --backend auto --force`.
+
+## Bold v5 Batch 1 review
+
+Batch 1 is an isolated eight-glyph candidate in `fontforge/bold-v5-batch1.sfd`; it does not overwrite the editable `fontforge/bold.sfd`. On the QA page, set Review state to **All states**, set Automatic finding to **Bold v5 Batch 1**, then press **Bold v5 Batch 1** to compare the candidate against Regular. Review controls are disabled in candidate mode.
+
+Rebuild and verify the frozen candidate with:
+
+```powershell
+& 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\repair_bold_batch.py --force
+& 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\verify_bold_v5_batch1.py
+```
+
+Do not start Batch 2 or promote this candidate into `fontforge/bold.sfd` until Batch 1 has been visually reviewed.
+
+## Bold v5.1 and Batch 2 review
+
+Seven approved Batch 1 glyphs are promoted into `fontforge/bold.sfd`, and the installable Bold metadata is version 1.002. The promoted review totals are 226 Pass, 60 Almost Done, and 54 Needs Rework. The rejected Batch 1 `uni2010` outline was not promoted.
+
+The complete Almost Done cohort is classified in `qa/assets/bold-v51-indent-audit.json`. Batch 2 remains an isolated preview in `fontforge/bold-v5-batch2.sfd`. Its second revision preserves the original Regular width of `uni2010`, adds 40 units of vertical weight without replacing its recognizable Bold silhouette, and constructs every quote from an exact affine expansion of its own authoritative Regular contour. Press **Bold v5 Batch 2** on the QA page; it automatically selects All states and the eight-glyph cohort. Review controls remain disabled until the candidate is accepted.
+
+Rebuild and verify Batch 2 with:
+
+```powershell
+& 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\repair_bold_batch2.py --force
+& 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\verify_bold_v5_batch2.py
+```
+
+Do not promote Batch 2 or begin another repair batch before visual review.
 
 ## Bold v4 verification
 

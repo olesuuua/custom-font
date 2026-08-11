@@ -25,16 +25,17 @@ import simplify_font as sf
 
 UPDATED_REGULAR_SFD = ROOT / "fontforge" / "redrawn.sfd"
 REGULAR_SFD = ROOT / "fontforge" / "regular-bold-base.sfd"
-BOLD_SFD = ROOT / "fontforge" / "bold.sfd"
+BOLD_SFD = ROOT / "fontforge" / "bold-v6.sfd"
+PREVIOUS_BOLD_SFD = ROOT / "fontforge" / "bold.sfd"
 RAW_BOLD_SFD = ROOT / "fontforge" / "bold-raw.sfd"
 REGULAR_TTF = ROOT / "qa" / "assets" / "redrawn.ttf"
 BASE_TTF = ROOT / "qa" / "assets" / "regular-bold-base.ttf"
-BOLD_TTF = ROOT / "qa" / "assets" / "bold.ttf"
+BOLD_TTF = ROOT / "qa" / "assets" / "bold-v6.ttf"
 RAW_BOLD_TTF = ROOT / "qa" / "assets" / "bold-raw.ttf"
 REPORT = ROOT / "qa" / "assets" / "bold-report.csv"
 META = ROOT / "qa" / "assets" / "bold-report.json"
 BUILD_INFO = ROOT / "qa" / "assets" / "bold-build.json"
-METRICS_VERSION = "bold-metrics-v4.1"
+METRICS_VERSION = "bold-metrics-v6"
 ALWAYS_FILL_COUNTERS = {"asterisk", "uni041D", "uni0427", "uni043D"}
 FORCE_SOLID_COUNTERS = ALWAYS_FILL_COUNTERS | {"t", "u", "z"}
 # Semantic targets for the audited v4 generic-blocker cohort. Zero means that
@@ -62,6 +63,7 @@ TOPOLOGY_SIZES = (128, 256, 512)
 
 FIELDS = [
     "glyph", "codepoint", "char", "category", "regular_hash", "base_hash", "bold_hash",
+    "previous_bold_hash", "changed_in_version",
     "base_cleanup_status", "bold_cleanup_status", "protection_status", "manual_blockers",
     "blocker_classification", "blocker_detail",
     "persistent_regular_components", "persistent_bold_components", "required_counters",
@@ -296,6 +298,9 @@ def repair_index():
         for name, row in payload.get("glyphs", {}).items():
             if row.get("status") == "ok":
                 result[name] = dict(row, glyph=name, source="v4")
+    v6 = load_json(ROOT / "qa" / "assets" / "bold-v6-repairs.json", {"glyphs": {}})
+    for name, row in v6.get("glyphs", {}).items():
+        result[name] = dict(row, glyph=name, source="v6")
     return result
 
 
@@ -387,6 +392,7 @@ def main():
     updated_regular = fontforge.open(str(UPDATED_REGULAR_SFD))
     regular = fontforge.open(str(REGULAR_SFD))
     bold = fontforge.open(str(BOLD_SFD))
+    previous_bold = fontforge.open(str(PREVIOUS_BOLD_SFD))
     raw_bold = fontforge.open(str(RAW_BOLD_SFD))
     build = json.loads(BUILD_INFO.read_text(encoding="utf-8")) if BUILD_INFO.exists() else {}
     methods = build.get("cleanup_methods", {})
@@ -422,6 +428,7 @@ def main():
         regular_glyphs = list(regular.glyphs())
         updated_by_name = {glyph.glyphname: glyph for glyph in updated_regular.glyphs()}
         bold_by_name = {glyph.glyphname: glyph for glyph in bold.glyphs()}
+        previous_by_name = {glyph.glyphname: glyph for glyph in previous_bold.glyphs()}
         regular_names = [glyph.glyphname for glyph in regular_glyphs]
         bold_names = [glyph.glyphname for glyph in bold.glyphs()]
         if set(regular_names) != set(bold_names):
@@ -498,6 +505,8 @@ def main():
                 "regular_hash": rf.layer_hash(updated_by_name[rg.glyphname].foreground),
                 "base_hash": rf.layer_hash(rlayer),
                 "bold_hash": rf.layer_hash(blayer),
+                "previous_bold_hash": rf.layer_hash(previous_by_name[rg.glyphname].foreground),
+                "changed_in_version": "true" if rf.layer_hash(previous_by_name[rg.glyphname].foreground) != rf.layer_hash(blayer) else "false",
                 "base_cleanup_status": base_cleanup.get(rg.glyphname, {}).get("status", "unknown"),
                 "bold_cleanup_status": "clean" if not (bintersections or bhandles or bopen) else "blocked",
                 "protection_status": protection.get(rg.glyphname, {}).get("status", "not-needed"),
@@ -510,7 +519,7 @@ def main():
                 "regular_outline_counters": 0,
                 "bold_outline_counters": 0,
                 "semantic_counter_target": "",
-                "ready_to_pass": "true" if rg.glyphname in ready else "false",
+                "ready_to_pass": "true" if rg.glyphname in ready and rf.layer_hash(previous_by_name[rg.glyphname].foreground) == rf.layer_hash(blayer) else "false",
                 "intentional_counter_fills": "false",
                 "unmatched_white_regions": 0,
                 "matched_required_counters": 0,
@@ -683,10 +692,11 @@ def main():
         updated_regular.close()
         regular.close()
         bold.close()
+        previous_bold.close()
         raw_bold.close()
 
     with REPORT.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDS, extrasaction="ignore")
+        writer = csv.DictWriter(handle, fieldnames=FIELDS, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -708,6 +718,7 @@ def main():
         "regular_sfd_hash": sha256(UPDATED_REGULAR_SFD),
         "base_sfd_hash": sha256(REGULAR_SFD),
         "bold_sfd_hash": sha256(BOLD_SFD),
+        "previous_bold_sfd_hash": sha256(PREVIOUS_BOLD_SFD),
         "regular_ttf_hash": sha256(REGULAR_TTF),
         "base_ttf_hash": sha256(BASE_TTF),
         "bold_ttf_hash": sha256(BOLD_TTF),
