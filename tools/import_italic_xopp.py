@@ -22,6 +22,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
@@ -36,6 +37,9 @@ if hasattr(os, "add_dll_directory") and PATHOPS_DIRECTORY.exists():
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.svgLib.path import parse_path
+
+from fast_highres_raster import rasterize as rasterize_contours
+from fast_highres_raster import topology as raster_topology
 
 from italic_template_common import (
     A4_HEIGHT,
@@ -62,6 +66,18 @@ TARGETED_REPAIRS = {
     "braceleft": {"kind": "continuous-joined-strokes", "targets": [24.226]},
     "uni212B": {"kind": "component-thickness", "targets": [20.08, 19.12, 22.75, 20.20]},
 }
+
+OUTLINE_MODES = ("exact", "xopp-compact", "compare")
+COMPACT_METHODS = ("xopp-polyline", "xopp-cubic")
+COMPACT_TOLERANCES = (0.35, 0.55, 0.8, 1.15, 1.6, 2.25, 3.2, 4.5, 6.4)
+COMPACT_BUDGETS = (80, 100, 120, 160, 240, 360, 500, 750, 1000, 1500)
+RASTER_SIZES = (32, 64, 128)
+TOPOLOGY_SIZES = (128, 256, 512, 1024)
+MAX_MSE = 0.010
+MIN_INK_IOU = 0.95
+MAX_FALSE_INK = 0.04
+MAX_BOUNDARY_P95 = 0.04
+MAX_BOUNDARY = 0.10
 
 
 def require_pathops():
@@ -357,6 +373,427 @@ def variable_width_outline(points: list[tuple[float, float]], widths: list[float
     ])
 
 
+def _point_segment_distance_3d(point, start, end) -> float:
+    delta = tuple(end[index] - start[index] for index in range(3))
+    length_sq = sum(value * value for value in delta)
+    if length_sq <= 1e-12:
+        return math.sqrt(sum((point[index] - start[index]) ** 2 for index in range(3)))
+    ratio = max(0.0, min(1.0, sum(
+        (point[index] - start[index]) * delta[index] for index in range(3)
+    ) / length_sq))
+    return math.sqrt(sum(
+        (point[index] - (start[index] + ratio * delta[index])) ** 2 for index in range(3)
+    ))
+
+
+def pressure_rdp(points, widths, tolerance):
+    """RDP in x/y/pressure space, retaining endpoints and pressure extrema."""
+    if len(points) <= 2:
+        return list(points), list(widths)
+    pressure_scale = 0.75
+    values = [(point[0], point[1], widths[index] * pressure_scale) for index, point in enumerate(points)]
+    keep = {0, len(points) - 1}
+    for index in range(1, len(widths) - 1):
+        before = widths[index] - widths[index - 1]
+        after = widths[index + 1] - widths[index]
+        if before * after <= 0 and max(abs(before), abs(after)) >= max(0.15, tolerance * 0.15):
+            keep.add(index)
+
+    def reduce(left, right):
+        if right <= left + 1:
+            return
+        distance, split = max(
+            (_point_segment_distance_3d(values[index], values[left], values[right]), index)
+            for index in range(left + 1, right)
+        )
+        protected = [index for index in keep if left < index < right]
+        if protected:
+            split = max(protected, key=lambda index: min(index - left, right - index))
+            distance = tolerance + 1
+        if distance > tolerance:
+            keep.add(split)
+            reduce(left, split)
+            reduce(split, right)
+
+    reduce(0, len(points) - 1)
+    indices = sorted(keep)
+    return [points[index] for index in indices], [widths[index] for index in indices]
+
+
+def _cubic_point(start, control1, control2, end, ratio):
+    inverse = 1.0 - ratio
+    return (
+        inverse ** 3 * start[0] + 3 * inverse * inverse * ratio * control1[0]
+        + 3 * inverse * ratio * ratio * control2[0] + ratio ** 3 * end[0],
+        inverse ** 3 * start[1] + 3 * inverse * inverse * ratio * control1[1]
+        + 3 * inverse * ratio * ratio * control2[1] + ratio ** 3 * end[1],
+    )
+
+
+def _fit_open_segment(points, widths, left, right):
+    subset = points[left:right + 1]
+    distances = [0.0]
+    for first, second in zip(subset, subset[1:]):
+        distances.append(distances[-1] + math.dist(first, second))
+    total = distances[-1]
+    parameters = [value / total for value in distances] if total > 1e-9 else [
+        index / max(1, len(subset) - 1) for index in range(len(subset))
+    ]
+
+    def unit(vector):
+        length = math.hypot(*vector)
+        return (vector[0] / length, vector[1] / length) if length > 1e-9 else (1.0, 0.0)
+
+    start, end = points[left], points[right]
+    tangent1 = unit((points[min(left + 2, right)][0] - start[0], points[min(left + 2, right)][1] - start[1]))
+    tangent2 = unit((points[max(right - 2, left)][0] - end[0], points[max(right - 2, left)][1] - end[1]))
+    c00 = c01 = c11 = x0 = x1 = 0.0
+    for offset, point in enumerate(subset[1:-1], 1):
+        ratio = parameters[offset]
+        inverse = 1.0 - ratio
+        a1 = (3 * inverse * inverse * ratio * tangent1[0], 3 * inverse * inverse * ratio * tangent1[1])
+        a2 = (3 * inverse * ratio * ratio * tangent2[0], 3 * inverse * ratio * ratio * tangent2[1])
+        base = (
+            start[0] * (inverse ** 3 + 3 * inverse * inverse * ratio)
+            + end[0] * (ratio ** 3 + 3 * inverse * ratio * ratio),
+            start[1] * (inverse ** 3 + 3 * inverse * inverse * ratio)
+            + end[1] * (ratio ** 3 + 3 * inverse * ratio * ratio),
+        )
+        residual = (point[0] - base[0], point[1] - base[1])
+        c00 += a1[0] ** 2 + a1[1] ** 2
+        c01 += a1[0] * a2[0] + a1[1] * a2[1]
+        c11 += a2[0] ** 2 + a2[1] ** 2
+        x0 += a1[0] * residual[0] + a1[1] * residual[1]
+        x1 += a2[0] * residual[0] + a2[1] * residual[1]
+    determinant = c00 * c11 - c01 * c01
+    chord = max(1e-9, math.dist(start, end))
+    if abs(determinant) <= 1e-9:
+        alpha = beta = chord / 3
+    else:
+        alpha = (x0 * c11 - x1 * c01) / determinant
+        beta = (c00 * x1 - c01 * x0) / determinant
+    if not (chord * 0.01 <= alpha <= chord * 3 and chord * 0.01 <= beta <= chord * 3):
+        alpha = beta = chord / 3
+    control1 = (start[0] + tangent1[0] * alpha, start[1] + tangent1[1] * alpha)
+    control2 = (end[0] + tangent2[0] * beta, end[1] + tangent2[1] * beta)
+    worst_error, split = 0.0, (left + right) // 2
+    for offset, point in enumerate(subset[1:-1], 1):
+        ratio = parameters[offset]
+        fitted = _cubic_point(start, control1, control2, end, ratio)
+        geometry_error = math.dist(point, fitted)
+        pressure_error = abs(widths[left + offset] - (
+            widths[left] + (widths[right] - widths[left]) * ratio
+        )) * 0.75
+        error = max(geometry_error, pressure_error)
+        if error > worst_error:
+            worst_error, split = error, left + offset
+    return (start, control1, control2, end), worst_error, split
+
+
+def pressure_cubic_samples(points, widths, tolerance):
+    """Fit open cubic runs, then sample them for variable-width expansion."""
+    if len(points) <= 2:
+        return list(points), list(widths)
+    segments = []
+
+    def fit(left, right):
+        cubic, error, split = _fit_open_segment(points, widths, left, right)
+        if error <= tolerance or right <= left + 2:
+            segments.append((left, right, cubic))
+            return
+        fit(left, split)
+        fit(split, right)
+
+    fit(0, len(points) - 1)
+    output_points, output_widths = [], []
+    spacing = max(2.0, tolerance * 2.0)
+    for left, right, cubic in segments:
+        control_length = sum(math.dist(first, second) for first, second in zip(cubic, cubic[1:]))
+        samples = max(2, min(24, int(math.ceil(control_length / spacing))))
+        for index in range(samples + 1):
+            if output_points and index == 0:
+                continue
+            ratio = index / samples
+            output_points.append(_cubic_point(*cubic, ratio))
+            output_widths.append(widths[left] + (widths[right] - widths[left]) * ratio)
+    return output_points, output_widths
+
+
+class _FlattenPathPen:
+    def __init__(self, steps=12):
+        self.steps = steps
+        self.contours = []
+        self.current = []
+        self.position = None
+
+    def moveTo(self, point):
+        if self.current:
+            self.contours.append(self.current)
+        self.current = [point]
+        self.position = point
+
+    def lineTo(self, point):
+        self.current.append(point)
+        self.position = point
+
+    def curveTo(self, *points):
+        start = self.position
+        control1, control2, end = points
+        for index in range(1, self.steps + 1):
+            self.current.append(_cubic_point(start, control1, control2, end, index / self.steps))
+        self.position = end
+
+    def qCurveTo(self, *points):
+        values = [point for point in points if point is not None]
+        if len(values) != 2:
+            for point in values:
+                self.lineTo(point)
+            return
+        control, end = values
+        start = self.position
+        cubic1 = (start[0] + 2 * (control[0] - start[0]) / 3, start[1] + 2 * (control[1] - start[1]) / 3)
+        cubic2 = (end[0] + 2 * (control[0] - end[0]) / 3, end[1] + 2 * (control[1] - end[1]) / 3)
+        self.curveTo(cubic1, cubic2, end)
+
+    def closePath(self):
+        if self.current:
+            self.contours.append(self.current)
+        self.current = []
+        self.position = None
+
+    def endPath(self):
+        self.closePath()
+
+    def addComponent(self, *_args):
+        raise ValueError("compact paths cannot contain components")
+
+
+def flattened_contours(path, steps=12):
+    pen = _FlattenPathPen(steps)
+    path.draw(pen)
+    if pen.current:
+        pen.endPath()
+    return pen.contours
+
+
+def path_point_count(path) -> int:
+    count = 0
+
+    class CountPen:
+        def moveTo(self, _point):
+            nonlocal count; count += 1
+        def lineTo(self, _point):
+            nonlocal count; count += 1
+        def curveTo(self, *points):
+            nonlocal count; count += len(points)
+        def qCurveTo(self, *points):
+            nonlocal count; count += len([point for point in points if point is not None])
+        def closePath(self): pass
+        def endPath(self): pass
+        def addComponent(self, *_args): pass
+
+    path.draw(CountPen())
+    return count
+
+
+def _raster_metrics(reference: bytes, candidate: bytes) -> dict:
+    reference_ink = sum(reference)
+    candidate_ink = sum(candidate)
+    intersection = sum(1 for first, second in zip(reference, candidate) if first and second)
+    union = sum(1 for first, second in zip(reference, candidate) if first or second)
+    false_positive = sum(1 for first, second in zip(reference, candidate) if not first and second)
+    false_negative = sum(1 for first, second in zip(reference, candidate) if first and not second)
+    return {
+        "mse": (false_positive + false_negative) / max(1, len(reference)),
+        "ink_iou": intersection / max(1, union),
+        "false_positive_ink": false_positive / max(1, candidate_ink),
+        "false_negative_ink": false_negative / max(1, reference_ink),
+    }
+
+
+def _downsample_mask(mask: bytes, source_size: int, target_size: int) -> list[float]:
+    factor = source_size // target_size
+    area = float(factor * factor)
+    return [
+        sum(
+            mask[(row * factor + dy) * source_size + column * factor + dx]
+            for dy in range(factor) for dx in range(factor)
+        ) / area
+        for row in range(target_size) for column in range(target_size)
+    ]
+
+
+def _boundary_pixels(mask: bytes, size: int) -> list[int]:
+    result = []
+    for row in range(size):
+        for column in range(size):
+            offset = row * size + column
+            if not mask[offset]:
+                continue
+            if row in (0, size - 1) or column in (0, size - 1) or any(
+                not mask[(row + dy) * size + column + dx]
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1))
+            ):
+                result.append(offset)
+    return result
+
+
+def _distance_to_boundary(source: list[int], target: list[int], size: int) -> list[float]:
+    if not source:
+        return []
+    if not target:
+        return [1.0] * len(source)
+    # Chamfer distance transform, normalized to the fixed comparison viewport.
+    infinity = size * 4.0
+    distances = [infinity] * (size * size)
+    for offset in target:
+        distances[offset] = 0.0
+    diagonal = math.sqrt(2.0)
+    for row in range(size):
+        for column in range(size):
+            offset = row * size + column
+            value = distances[offset]
+            if column: value = min(value, distances[offset - 1] + 1)
+            if row:
+                value = min(value, distances[offset - size] + 1)
+                if column: value = min(value, distances[offset - size - 1] + diagonal)
+                if column + 1 < size: value = min(value, distances[offset - size + 1] + diagonal)
+            distances[offset] = value
+    for row in range(size - 1, -1, -1):
+        for column in range(size - 1, -1, -1):
+            offset = row * size + column
+            value = distances[offset]
+            if column + 1 < size: value = min(value, distances[offset + 1] + 1)
+            if row + 1 < size:
+                value = min(value, distances[offset + size] + 1)
+                if column: value = min(value, distances[offset + size - 1] + diagonal)
+                if column + 1 < size: value = min(value, distances[offset + size + 1] + diagonal)
+            distances[offset] = value
+    return [distances[offset] / size for offset in source]
+
+
+def compare_paths(reference, candidate, full_topology=False) -> dict:
+    bbox = (FONT_X_MIN, FONT_Y_MIN, FONT_X_MAX, FONT_Y_MAX)
+    reference_contours = flattened_contours(reference)
+    candidate_contours = flattened_contours(candidate)
+    result = {}
+    masks = {}
+    for size in RASTER_SIZES:
+        raster_size = size * 4 if size == 32 else size
+        reference_raw = rasterize_contours(reference_contours, bbox, raster_size)
+        candidate_raw = rasterize_contours(candidate_contours, bbox, raster_size)
+        reference_mask = _downsample_mask(reference_raw, raster_size, size) if raster_size != size else reference_raw
+        candidate_mask = _downsample_mask(candidate_raw, raster_size, size) if raster_size != size else candidate_raw
+        masks[size] = (reference_mask, candidate_mask)
+        for key, value in _raster_metrics(reference_mask, candidate_mask).items():
+            result[f"{key}_{size}"] = round(value, 6)
+    reference_boundary = _boundary_pixels(masks[128][0], 128)
+    candidate_boundary = _boundary_pixels(masks[128][1], 128)
+    boundary = sorted(
+        _distance_to_boundary(reference_boundary, candidate_boundary, 128)
+        + _distance_to_boundary(candidate_boundary, reference_boundary, 128)
+    )
+    result["boundary_p95"] = round(boundary[min(len(boundary) - 1, int(len(boundary) * .95))], 6) if boundary else 0.0
+    result["boundary_max"] = round(boundary[-1], 6) if boundary else 0.0
+    topologies = {}
+    topology_match = True
+    topology_sizes = TOPOLOGY_SIZES if full_topology else (128,)
+    for size in topology_sizes:
+        reference_topology = raster_topology(rasterize_contours(reference_contours, bbox, size), size)
+        candidate_topology = raster_topology(rasterize_contours(candidate_contours, bbox, size), size)
+        topologies[str(size)] = {"reference": reference_topology, "candidate": candidate_topology}
+        topology_match = topology_match and reference_topology == candidate_topology
+    result["topologies"] = topologies
+    result["topology_status"] = "match" if topology_match else "mismatch"
+    reference_bounds = path_bounds(reference)
+    candidate_bounds = path_bounds(candidate)
+    tolerance = max(
+        8.0,
+        (reference_bounds[2] - reference_bounds[0]) * .015,
+        (reference_bounds[3] - reference_bounds[1]) * .015,
+    )
+    result["bounds_drift"] = round(max(abs(first - second) for first, second in zip(reference_bounds, candidate_bounds)), 4)
+    result["bounds_status"] = "pass" if result["bounds_drift"] <= tolerance else "fail"
+    result["passes"] = bool(
+        topology_match and result["bounds_status"] == "pass"
+        and all(result[f"mse_{size}"] <= MAX_MSE for size in RASTER_SIZES)
+        and all(result[f"ink_iou_{size}"] >= MIN_INK_IOU for size in RASTER_SIZES)
+        and all(result[f"false_positive_ink_{size}"] <= MAX_FALSE_INK for size in RASTER_SIZES)
+        and all(result[f"false_negative_ink_{size}"] <= MAX_FALSE_INK for size in RASTER_SIZES)
+        and result["boundary_p95"] <= MAX_BOUNDARY_P95
+        and result["boundary_max"] <= MAX_BOUNDARY
+    )
+    return result
+
+
+def compact_budget(points: int) -> int:
+    return next((budget for budget in COMPACT_BUDGETS if points <= budget), points)
+
+
+def build_compact_candidates(strokes, reference, glyph_name, work, index) -> dict:
+    started = time.perf_counter()
+    candidates = []
+    for method in COMPACT_METHODS:
+        for tolerance in COMPACT_TOLERANCES:
+            shapes = []
+            centerline_points = 0
+            for points, widths in strokes:
+                if method == "xopp-polyline":
+                    reduced_points, reduced_widths = pressure_rdp(points, widths, tolerance)
+                else:
+                    reduced_points, reduced_widths = pressure_cubic_samples(points, widths, tolerance)
+                centerline_points += len(reduced_points)
+                shapes.append(variable_width_outline(reduced_points, reduced_widths))
+            candidate = union_and_clip(shapes)
+            points = path_point_count(candidate)
+            metrics = compare_paths(reference, candidate, full_topology=False)
+            record = {
+                "method": method,
+                "tolerance": tolerance,
+                "centerline_points": centerline_points,
+                "final_points": points,
+                "selected_budget": compact_budget(points),
+                "candidate_bounds": path_bounds(candidate),
+                **metrics,
+            }
+            candidates.append((record, candidate))
+    reference_points = path_point_count(reference)
+    passing = []
+    for record, path in sorted(candidates, key=lambda value: value[0]["final_points"]):
+        if not record["passes"]:
+            continue
+        verified = compare_paths(reference, path, full_topology=True)
+        record.update(verified)
+        if record["passes"] and record["final_points"] < reference_points:
+            passing.append((record, path))
+            break
+    selected = min(passing, key=lambda value: (value[0]["final_points"], value[0]["boundary_p95"])) if passing else None
+    candidate_directory = work / "xopp-candidate-glyph-svg"
+    comparison_directory = work / "comparison-glyph-svg"
+    comparison_directory.mkdir(parents=True, exist_ok=True)
+    summaries = []
+    for record, path in candidates:
+        # Comparison mode can expose every method/tolerance without making it authoritative.
+        summaries.append(record)
+    if selected:
+        record, path = selected
+        destination = candidate_directory / f"{index:03d}-{glyph_name}.svg"
+        path_to_svg(path, destination)
+        selected_record = dict(record, svg=str(destination.resolve()), fallback_reason="")
+    else:
+        selected_record = {
+            "method": "exact-fallback", "tolerance": 0.0,
+            "centerline_points": sum(len(points) for points, _ in strokes),
+            "final_points": reference_points, "selected_budget": reference_points,
+            "svg": "", "fallback_reason": "no smaller compact candidate passed every fidelity gate",
+            "passes": True, "topology_status": "reference", "bounds_drift": 0.0,
+            "boundary_p95": 0.0, "boundary_max": 0.0,
+            "candidate_bounds": path_bounds(reference),
+        }
+    selected_record["processing_seconds"] = round(time.perf_counter() - started, 4)
+    return {"selected": selected_record, "candidates": summaries}
+
+
 def constant_width_outline(points: list[tuple[float, float]], width: float) -> pathops.Path:
     """Stroke one complete sampled centreline with one cap at each true end."""
     clean = []
@@ -426,8 +863,11 @@ def outside_safe_bounds(bounds: list[float]) -> bool:
     )
 
 
-def extract_glyph_svgs(xopp: Path, manifest: dict, work: Path, svg_pages: Path) -> dict:
+def extract_glyph_svgs(xopp: Path, manifest: dict, work: Path, svg_pages: Path,
+                        outline_mode: str = "exact", compact_glyphs=None) -> dict:
     """Match exported SVG paths to XOPP strokes, then build exact canonical glyphs."""
+    if outline_mode not in OUTLINE_MODES:
+        raise ValueError(f"outline mode must be one of {OUTLINE_MODES}")
     require_pathops()
     root = load_xopp(xopp)
     pages = page_and_ink_layers(root)
@@ -528,6 +968,12 @@ def extract_glyph_svgs(xopp: Path, manifest: dict, work: Path, svg_pages: Path) 
     upper_threshold = thickness_median + 3 * thickness_mad
 
     records = {}
+    compact_completed = 0
+    compact_total = sum(
+        compact_glyphs is None or entry["glyph_name"] in compact_glyphs
+        for entry in manifest["glyphs"]
+        if entry["glyph_name"] in exact_paths_by_glyph
+    ) if outline_mode in ("xopp-compact", "compare") else 0
     for entry in manifest["glyphs"]:
         glyph_name = entry["glyph_name"]
         before = thicknesses.get(glyph_name)
@@ -559,6 +1005,34 @@ def extract_glyph_svgs(xopp: Path, manifest: dict, work: Path, svg_pages: Path) 
             path_to_svg(canonical_path, canonical_svg_path)
             if adjustment != "none":
                 path_to_svg(final_path, svg_path)
+        compact = None
+        selected_svg = svg_path
+        compact_selected_for_scope = compact_glyphs is None or glyph_name in compact_glyphs
+        if exact_paths and outline_mode in ("xopp-compact", "compare") and compact_selected_for_scope:
+            compact_strokes = strokes_by_glyph.get(glyph_name, [])
+            if adjustment != "none":
+                repair = TARGETED_REPAIRS[glyph_name]
+                if repair["kind"] == "continuous-joined-strokes":
+                    joined_points, _ = join_stroke_fragments(compact_strokes)
+                    compact_strokes = [(joined_points, [repair["targets"][0]] * len(joined_points))]
+                else:
+                    compact_strokes = [
+                        (points, [repair["targets"][stroke_index] if repair["targets"] else statistics.median(widths)] * len(points))
+                        for stroke_index, (points, widths) in enumerate(compact_strokes)
+                    ]
+            compact = build_compact_candidates(
+                compact_strokes, final_path, glyph_name, work, entry["index"]
+            )
+            compact_completed += 1
+            if compact_completed == 1 or compact_completed % 10 == 0 or compact_completed == compact_total:
+                print(
+                    f"italic compact progress: {compact_completed}/{compact_total}",
+                    file=sys.stderr, flush=True,
+                )
+            compact_selected = compact["selected"]
+            if compact_selected.get("svg"):
+                if outline_mode == "xopp-compact":
+                    selected_svg = Path(compact_selected["svg"])
         bounds = path_bounds(final_path) if exact_paths else []
         records[glyph_name] = {
             "index": entry["index"],
@@ -567,18 +1041,28 @@ def extract_glyph_svgs(xopp: Path, manifest: dict, work: Path, svg_pages: Path) 
             "row": entry["row"],
             "column": entry["column"],
             "stroke_count": len(strokes_by_glyph.get(glyph_name, [])),
+            "source_centerline_points": sum(
+                len(points) for points, _ in strokes_by_glyph.get(glyph_name, [])
+            ),
             "exact_path_count": len(exact_paths),
             "canonical_contours": contour_count(canonical_path) if exact_paths else 0,
+            "exact_points": path_point_count(final_path) if exact_paths else 0,
             "final_contours": contour_count(final_path) if exact_paths else 0,
             "canonical_counters": path_counter_count(canonical_path) if exact_paths else 0,
             "final_counters": path_counter_count(final_path) if exact_paths else 0,
             "source_svg": str(source_svg_path.resolve()) if exact_paths else "",
             "canonical_svg": str(canonical_svg_path.resolve()) if exact_paths else "",
-            "svg": str(svg_path.resolve()) if exact_paths else "",
+            "svg": str(selected_svg.resolve()) if exact_paths else "",
+            "exact_svg": str(svg_path.resolve()) if exact_paths else "",
+            "compact_svg": compact["selected"].get("svg", "") if compact else "",
+            "outline_mode": outline_mode,
+            "selected_method": compact["selected"]["method"] if compact else "exact-svg",
+            "compact": compact,
             "source_hash": sha256_path(source_svg_path) if exact_paths else "",
             "canonical_hash": sha256_path(canonical_svg_path) if exact_paths else "",
-            "candidate_hash": sha256_path(svg_path) if exact_paths else "",
+            "candidate_hash": sha256_path(selected_svg) if exact_paths else "",
             "bounds": bounds,
+            "candidate_bounds": compact["selected"].get("candidate_bounds", bounds) if compact and outline_mode == "xopp-compact" else bounds,
             "outside_safe_bounds": outside_safe_bounds(bounds) if bounds else False,
             "thickness_before": round(before, 4) if before is not None else None,
             "thickness_after": round(statistics.median(
@@ -591,6 +1075,8 @@ def extract_glyph_svgs(xopp: Path, manifest: dict, work: Path, svg_pages: Path) 
             "status": "extracted" if exact_paths else "missing",
         }
     return {
+        "outline_mode": outline_mode,
+        "compact_scope": sorted(compact_glyphs) if compact_glyphs is not None else "all",
         "glyphs": records,
         "warnings": warnings,
         "ignored_nonblack_strokes": ignored_nonblack,
@@ -605,6 +1091,48 @@ def extract_glyph_svgs(xopp: Path, manifest: dict, work: Path, svg_pages: Path) 
             "automatic_normalization": "disabled",
         },
         "completed_glyphs": sum(record["status"] == "extracted" for record in records.values()),
+    }
+
+
+def compact_comparison_report(extraction: dict) -> dict:
+    records = [record for record in extraction["glyphs"].values() if record.get("compact")]
+    selected = [record["compact"]["selected"] for record in records]
+    compacted = [record for record in selected if record["method"] != "exact-fallback"]
+    exact_points = sum(record.get("exact_points", 0) for record in records)
+    selected_points = sum(record["final_points"] for record in selected)
+    methods = {}
+    for method in COMPACT_METHODS:
+        candidates = [
+            candidate for record in records for candidate in record["compact"]["candidates"]
+            if candidate["method"] == method
+        ]
+        methods[method] = {
+            "candidates": len(candidates),
+            "passing_candidates": sum(bool(candidate["passes"]) for candidate in candidates),
+            "best_selected_glyphs": sum(record["method"] == method for record in selected),
+        }
+    compact_rate = len(compacted) / max(1, len(records))
+    reduction = 1.0 - selected_points / max(1, exact_points)
+    return {
+        "format": "olesuas-hand-italic-compact-comparison-v1",
+        "glyphs": len(records),
+        "compacted_glyphs": len(compacted),
+        "exact_fallback_glyphs": len(records) - len(compacted),
+        "compact_rate": round(compact_rate, 6),
+        "exact_points": exact_points,
+        "selected_points": selected_points,
+        "point_reduction": round(reduction, 6),
+        "processing_seconds": round(sum(record.get("processing_seconds", 0) for record in selected), 4),
+        "methods": methods,
+        "acceptance": {
+            "minimum_compact_rate": 0.90,
+            "minimum_point_reduction": 0.70,
+            "all_selected_candidates_pass": all(record.get("passes") for record in selected),
+            "recommended_for_default": bool(
+                compact_rate >= .90 and reduction >= .70
+                and all(record.get("passes") for record in selected)
+            ),
+        },
     }
 
 
@@ -784,7 +1312,7 @@ def build_font(manifest: dict, extraction: dict, output_sfd: Path, output_ttf: P
             # ascender on Windows. Re-align the imported outline to the
             # manifest-space lower bound so the drawing baseline is retained.
             imported_bounds = glyph.boundingBox()
-            import_y_correction = record["bounds"][1] - imported_bounds[1]
+            import_y_correction = record.get("candidate_bounds", record["bounds"])[1] - imported_bounds[1]
             glyph.transform(psMat.translate(0, import_y_correction))
             quality = {
                 "raw_points": layer_point_count(glyph.foreground),
@@ -922,12 +1450,22 @@ def write_geometry_report(extraction: dict, font_report: dict, destination: Path
         "thickness_outlier", "normalization_factor", "bounds", "outside_safe_bounds",
         "width", "left_sidebearing", "right_sidebearing", "raw_points", "points", "contours",
         "topology_status", "point_budget_warning", "source_hash", "candidate_hash", "source_svg", "candidate_svg",
+        "outline_mode", "selected_method", "source_centerline_points", "compact_centerline_points",
+        "compact_final_points", "selected_budget", "fit_tolerance", "processing_seconds",
+        "fallback_reason", "compact_passes", "compact_topology_status", "bounds_drift",
+        "boundary_p95", "boundary_max", "compact_svg", "exact_svg",
     ]
+    for size in RASTER_SIZES:
+        fields.extend([
+            f"mse_{size}", f"ink_iou_{size}", f"false_positive_ink_{size}",
+            f"false_negative_ink_{size}",
+        ])
     with destination.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         for name, record in sorted(extraction["glyphs"].items(), key=lambda item: item[1]["index"]):
             built = font_report.get("glyphs", {}).get(name, {})
+            compact = (record.get("compact") or {}).get("selected", {})
             writer.writerow({
                 "index": record["index"], "glyph": name, "codepoint": record.get("codepoint"), "status": built.get("status", record["status"]),
                 "stroke_count": record["stroke_count"], "exact_path_count": record.get("exact_path_count", 0),
@@ -945,6 +1483,30 @@ def write_geometry_report(extraction: dict, font_report: dict, destination: Path
                 "point_budget_warning": str(built.get("point_budget_warning", False)).lower(), "source_hash": built.get("source_hash", record["source_hash"]),
                 "candidate_hash": built.get("candidate_hash", record["candidate_hash"]), "source_svg": record["source_svg"],
                 "candidate_svg": built.get("final_font_svg", record["svg"]),
+                "outline_mode": record.get("outline_mode", "exact"),
+                "selected_method": record.get("selected_method", "exact-svg"),
+                "source_centerline_points": record.get("source_centerline_points", ""),
+                "compact_centerline_points": compact.get("centerline_points", ""),
+                "compact_final_points": compact.get("final_points", ""),
+                "selected_budget": compact.get("selected_budget", ""),
+                "fit_tolerance": compact.get("tolerance", ""),
+                "processing_seconds": compact.get("processing_seconds", ""),
+                "fallback_reason": compact.get("fallback_reason", ""),
+                "compact_passes": str(compact.get("passes", "")).lower(),
+                "compact_topology_status": compact.get("topology_status", ""),
+                "bounds_drift": compact.get("bounds_drift", ""),
+                "boundary_p95": compact.get("boundary_p95", ""),
+                "boundary_max": compact.get("boundary_max", ""),
+                "compact_svg": record.get("compact_svg", ""),
+                "exact_svg": record.get("exact_svg", ""),
+                **{
+                    key: compact.get(key, "")
+                    for size in RASTER_SIZES
+                    for key in (
+                        f"mse_{size}", f"ink_iou_{size}", f"false_positive_ink_{size}",
+                        f"false_negative_ink_{size}",
+                    )
+                },
             })
 
 
@@ -1001,6 +1563,11 @@ def main():
     parser.add_argument("xopp", type=Path, nargs="?")
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
     parser.add_argument("--svg-pages", type=Path)
+    parser.add_argument("--outline-mode", choices=OUTLINE_MODES, default="exact")
+    parser.add_argument(
+        "--compact-glyph", action="append",
+        help="Limit compact/compare candidate generation to named glyphs; repeat for diagnostics.",
+    )
     parser.add_argument("--work", type=Path, default=ROOT / "output" / "italic-import")
     parser.add_argument("--output-sfd", type=Path, default=ROOT / "fontforge" / "italic-review.sfd")
     parser.add_argument("--output-ttf", type=Path, default=ROOT / "output" / "font" / "OlesuasHand-Italic-review.ttf")
@@ -1047,7 +1614,10 @@ def main():
     compatibility = structural_compatibility(manifest)
     if args.svg_pages is None:
         raise ValueError("--svg-pages is required; exported SVG pages are the authoritative geometry")
-    extraction = extract_glyph_svgs(args.xopp, manifest, args.work, args.svg_pages)
+    extraction = extract_glyph_svgs(
+        args.xopp, manifest, args.work, args.svg_pages, outline_mode=args.outline_mode,
+        compact_glyphs=set(args.compact_glyph) if args.compact_glyph else None,
+    )
     report = {
         "format": "olesuas-hand-italic-import-v2",
         "compatibility": compatibility,
@@ -1055,6 +1625,12 @@ def main():
     }
     extraction_path = args.work / "italic-extraction-report.json"
     extraction_path.write_text(json.dumps(extraction, ensure_ascii=False, indent=2), encoding="utf-8")
+    comparison = None
+    if args.outline_mode in ("xopp-compact", "compare"):
+        comparison = compact_comparison_report(extraction)
+        comparison_path = args.work / "italic-compact-comparison.json"
+        comparison_path.write_text(json.dumps(comparison, ensure_ascii=False, indent=2), encoding="utf-8")
+        report["compact_comparison"] = comparison
     report["svg_source"] = validate_svg_pages(args.svg_pages)
     if not args.extract_only:
         report["font"] = run_fontforge_worker(
@@ -1067,14 +1643,27 @@ def main():
             args.allow_partial,
         )
         write_geometry_report(extraction, report["font"], args.work / "italic-glyph-report.csv")
+        if args.work.resolve() == (ROOT / "output" / "italic-import").resolve():
+            subprocess.run(
+                [sys.executable, str(ROOT / "tools" / "generate_italic_static_qa.py")],
+                cwd=str(ROOT), check=True,
+            )
         build_manifest = {
-            "format": "olesuas-hand-italic-build-v2-exact-svg",
+            "format": (
+                "olesuas-hand-italic-build-v2-exact-svg"
+                if args.outline_mode == "exact" else "olesuas-hand-italic-build-v3-xopp-compact"
+            ),
             "review_status": "awaiting-manual-review",
-            "geometry_source": "12 exported SVG pages",
+            "outline_mode": args.outline_mode,
+            "geometry_source": (
+                "XOPP centerlines fidelity-gated against 12 exported SVG pages"
+                if args.outline_mode == "xopp-compact" else "12 exported SVG pages"
+            ),
             "svg_xopp_matching": extraction["svg_xopp_matching"],
             "automatic_thickness_normalization": False,
             "fontforge_overlap_removal": False,
-            "simplification": False,
+            "simplification": args.outline_mode == "xopp-compact",
+            "compact_comparison": comparison,
             "targeted_repair_version": TARGETED_REPAIR_VERSION,
             "targeted_repairs": TARGETED_REPAIRS,
             "glyph_count": len(manifest["glyphs"]),

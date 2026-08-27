@@ -9,6 +9,8 @@ import json
 import mimetypes
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -23,6 +25,11 @@ DECISIONS = QA_ROOT / "italic-manual-decisions.json"
 REVIEW_TTF = ROOT / "output" / "font" / "OlesuasHand-Italic-review.ttf"
 QA_REVIEW_TTF = QA_ROOT / "assets" / "italic-review.ttf"
 VALID_STATUSES = {"pass", "almost_done", "needs_rework"}
+ARTIFACT_DIRECTORIES = {
+    "source_svg": "exact-source-glyph-svg",
+    "compact_svg": "xopp-candidate-glyph-svg",
+    "candidate_svg": "final-font-glyph-svg",
+}
 
 
 def load_rows():
@@ -30,6 +37,17 @@ def load_rows():
         return {}
     with REPORT.open(encoding="utf-8-sig", newline="") as handle:
         return {row["glyph"]: row for row in csv.DictReader(handle)}
+
+
+def artifact_for(row, field):
+    allowed = (ROOT / "output" / "italic-import").resolve()
+    supplied = Path(row.get(field, "")).resolve() if row.get(field) else None
+    if supplied and allowed in supplied.parents and supplied.exists():
+        return supplied
+    directory = ARTIFACT_DIRECTORIES[field]
+    filename = f"{int(row['index']):03d}-{row['glyph']}.svg"
+    fallback = allowed / directory / filename
+    return fallback if fallback.exists() else None
 
 
 def empty_decisions():
@@ -55,6 +73,10 @@ def atomic_write(values):
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, DECISIONS)
+        subprocess.run(
+            [sys.executable, str(ROOT / "tools" / "generate_italic_static_qa.py")],
+            cwd=str(ROOT), check=True, stdout=subprocess.DEVNULL,
+        )
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -92,11 +114,15 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/review":
             self.send_json(HTTPStatus.OK, load_decisions())
             return
-        for prefix, field in (("/api/source/", "source_svg"), ("/api/candidate/", "candidate_svg")):
+        for prefix, field in (
+            ("/api/source/", "source_svg"),
+            ("/api/compact/", "compact_svg"),
+            ("/api/candidate/", "candidate_svg"),
+        ):
             if path.startswith(prefix):
                 glyph = unquote(path[len(prefix):])
                 row = load_rows().get(glyph)
-                artifact = Path(row[field]).resolve() if row and row.get(field) else None
+                artifact = artifact_for(row, field) if row else None
                 allowed = (ROOT / "output" / "italic-import").resolve()
                 if not artifact or allowed not in artifact.parents or not artifact.exists():
                     self.send_error(HTTPStatus.NOT_FOUND)

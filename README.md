@@ -1,6 +1,6 @@
 # Olesuas Hand
 
-A custom handwritten font family with a reviewed Regular source and an independently editable Bold candidate.
+A custom handwritten font family with a reviewed Regular source, an independently editable Bold candidate, and an Italic drawing/review workflow.
 
 ## Font files
 
@@ -9,12 +9,23 @@ A custom handwritten font family with a reviewed Regular source and an independe
 - `fontforge/bold-raw.sfd` — untouched +40 diagnostic
 - `fontforge/bold.sfd` — approved Bold 1.002 source; unchanged while v6 is reviewed
 - `fontforge/bold-v6.sfd` — complete accumulated Bold v6 candidate (version 1.003)
+- `fontforge/italic-review.sfd` — immutable exact-SVG Italic review baseline
+- `fontforge/italic-v2-review.sfd` — hybrid Italic candidate with 15 fidelity-approved compact glyphs
+- `output/font/OlesuasHand-Italic-v2-review.ttf` — matching Italic v2 preview font
 - `qa/assets/redrawn.ttf` and `bold-v6.ttf` — active Regular/Bold v6 QA builds
 - `checkpoints/bold-v2-reviewed/` — preserved reviewed Bold v2 and its decisions
 - `checkpoints/bold-v3-reviewed/` — preserved fully reviewed Bold v3 and its decisions
 - `checkpoints/bold-v4/` — frozen verified Bold v4 sources, reports, decisions, and settings
 
 The family contains 340 serialized glyphs: 334 outlined glyphs and six empty/control glyphs.
+
+## Italic drawing and review
+
+The Italic importer pairs pressure-sensitive XOPP centreline strokes with the 12 exported SVG pages. The SVG outlines remain the fidelity reference and safe fallback. Full-family measurement showed that XOPP-first fitting safely reduced only 15 of 333 drawn glyphs, so exact SVG remains the production default.
+
+The 15 passing candidates are isolated in `fontforge/italic-v2-review.sfd` for manual inspection; every other glyph is unchanged from `fontforge/italic-review.sfd`. Scope, hashes, point-count results, and validation are recorded in `output/italic-v2/manifest.json` and `output/italic-v2/README.md`.
+
+Start the reviewer with `python tools\serve_italic_qa.py`, then open [http://127.0.0.1:8015/](http://127.0.0.1:8015/). Opening `qa/italic.html` directly is supported for read-only review; saving decisions requires the server. See `ITALIC_WORKFLOW.md` for build, comparison, acceptance, and verification commands.
 
 ## Bold v6 editing and review cycle
 
@@ -101,4 +112,4 @@ These tools created v3 and are retained for diagnosis or an intentional new repa
 
 Do not rerun repair or migration tools after later manual Bold edits unless intentionally starting a new repair pass. The normal cycle uses only `refresh_bold_qa.py`.
 
-Italic and Bold Italic are not part of this phase.
+Bold Italic is not part of this phase.

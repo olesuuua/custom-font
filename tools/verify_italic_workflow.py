@@ -24,6 +24,7 @@ except ImportError:
 
 from import_italic_xopp import (
     DEFAULT_FFPYTHON,
+    compact_comparison_report,
     extract_glyph_svgs,
     run_fontforge_worker,
     structural_compatibility,
@@ -136,6 +137,7 @@ def make_synthetic_svg_pages(directory: Path, xopp: Path):
 
 
 def synthetic_round_trip(manifest: dict, full_fontforge: bool) -> dict:
+    glyph_count = 8
     with tempfile.TemporaryDirectory(prefix="italic-workflow-") as temporary:
         temporary_path = Path(temporary)
         xopp = temporary_path / "synthetic.xopp"
@@ -146,7 +148,22 @@ def synthetic_round_trip(manifest: dict, full_fontforge: bool) -> dict:
         if extraction["completed_glyphs"] != 8:
             raise AssertionError(f"synthetic extraction completed {extraction['completed_glyphs']} glyphs, expected 8")
         validate_svg_pages(svg_pages)
+        comparison_extraction = extract_glyph_svgs(
+            xopp, manifest, temporary_path / "comparison", svg_pages,
+            outline_mode="compare",
+            compact_glyphs={entry["glyph_name"] for entry in manifest["glyphs"][:glyph_count]},
+        )
+        comparison = compact_comparison_report(comparison_extraction)
+        if comparison["glyphs"] != glyph_count:
+            raise AssertionError("compact comparison did not cover the requested synthetic scope")
+        if any(
+            Path(comparison_extraction["glyphs"][entry["glyph_name"]]["svg"]).read_bytes()
+            != Path(extraction["glyphs"][entry["glyph_name"]]["svg"]).read_bytes()
+            for entry in manifest["glyphs"][:glyph_count]
+        ):
+            raise AssertionError("comparison mode changed authoritative exact SVG geometry")
         result = {"completed_glyphs": extraction["completed_glyphs"], "fontforge": "not requested"}
+        result["compact_comparison"] = comparison
         if full_fontforge:
             output_sfd = temporary_path / "italic-test.sfd"
             output_ttf = temporary_path / "italic-test.ttf"
