@@ -1,18 +1,35 @@
 # Olesuas Hand
 
-A custom handwritten font family with a reviewed Regular source, an independently editable Bold candidate, and an Italic drawing/review workflow.
+A custom handwritten font family with completed Regular and Bold styles and a
+separate Italic drawing/review workflow.
+
+## Final release status
+
+**Regular and Bold are finalized and approved. No further drawing, spacing, or
+kerning changes are required.** The release masters are `regular-final.sfd` and
+`bold-final.sfd`; the installable builds are `qa/assets/regular-final.ttf` and
+`qa/assets/bold-final.ttf`.
+
+Treat these four files as the immutable completed release. Earlier `redrawn`,
+`bold-v6`, and `bold-manual` files remain only as development history or build
+inputs. See [FINAL_FONTS.md](FINAL_FONTS.md) for the release contents and
+verification procedure.
 
 ## Font files
 
-- `fontforge/redrawn.sfd` — authoritative updated Regular source (weight 400; never cleaned in place)
+- `regular-final.sfd` — completed Regular release master; no changes needed
+- `bold-final.sfd` — completed Bold release master; no changes needed
+- `qa/assets/regular-final.ttf` — completed installable Regular font
+- `qa/assets/bold-final.ttf` — completed installable Bold font
+- `fontforge/redrawn.sfd` — preserved Regular build input (weight 400; never cleaned in place)
 - `fontforge/regular-bold-base.sfd` — overlap-cleaned copy used only as the Bold source
 - `fontforge/bold-raw.sfd` — untouched +40 diagnostic
-- `fontforge/bold.sfd` — approved Bold 1.002 source; unchanged while v6 is reviewed
-- `fontforge/bold-v6.sfd` — complete accumulated Bold v6 candidate (version 1.003)
+- `fontforge/bold.sfd` — historical approved Bold 1.002 source
+- `fontforge/bold-v6.sfd` — historical pre-final Bold v6 candidate (version 1.003)
 - `fontforge/italic-review.sfd` — immutable exact-SVG Italic review baseline
 - `fontforge/italic-v2-review.sfd` — hybrid Italic candidate with 15 fidelity-approved compact glyphs
 - `output/font/OlesuasHand-Italic-v2-review.ttf` — matching Italic v2 preview font
-- `qa/assets/redrawn.ttf` and `bold-v6.ttf` — active Regular/Bold v6 QA builds
+- `qa/assets/redrawn.ttf` and `bold-v6.ttf` — historical Regular/Bold v6 QA builds
 - `checkpoints/bold-v2-reviewed/` — preserved reviewed Bold v2 and its decisions
 - `checkpoints/bold-v3-reviewed/` — preserved fully reviewed Bold v3 and its decisions
 - `checkpoints/bold-v4/` — frozen verified Bold v4 sources, reports, decisions, and settings
@@ -27,9 +44,12 @@ The 15 passing candidates are isolated in `fontforge/italic-v2-review.sfd` for m
 
 Start the reviewer with `python tools\serve_italic_qa.py`, then open [http://127.0.0.1:8015/](http://127.0.0.1:8015/). Opening `qa/italic.html` directly is supported for read-only review; saving decisions requires the server. See `ITALIC_WORKFLOW.md` for build, comparison, acceptance, and verification commands.
 
-## Bold v6 editing and review cycle
+## Historical Bold v6 editing and review cycle
 
-Bold v6 is one complete 340-glyph candidate, not a set of visible batches. Rebuild the candidate and its active QA report with:
+This workflow produced the now-completed Bold release and is retained as build
+history. The `*-final` release files supersede this candidate. Bold v6 is one
+complete 340-glyph candidate, not a set of visible batches. Rebuild its report
+with:
 
 ```powershell
 & 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\build_bold_v6.py --force
@@ -37,7 +57,10 @@ Bold v6 is one complete 340-glyph candidate, not a set of visible batches. Rebui
 python tools\migrate_bold_v6_decisions.py
 ```
 
-Start the guarded local review server with `./tools/start_bold_qa.ps1`, using `-ReplaceProjectServer` when it identifies an older server from this project. Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+The historical guarded review server can be started with
+`./tools/start_bold_qa.ps1`, using `-ReplaceProjectServer` when it identifies an
+older server from this project. The active `qa/index.html` now shows final
+Regular/Bold sentence specimens instead of glyph review controls.
 
 The page shows only untouched Regular, current full Bold v6, and an optional overlay. Search, review state, glyph category, and the compact issue filter remain available. Historical raw, base, pilot, and batch fonts are retained only in checkpoints and are not loaded by the active page.
 
@@ -49,7 +72,8 @@ Freeze the active full revision with `python tools/freeze_bold_v6.py --revision 
 & 'C:\Program Files\FontForgeBuilds\bin\ffpython.exe' tools\verify_bold_v6.py
 ```
 
-Intentional filled counters remain permitted for `asterisk`, `uni041D`, `uni0427`, and `uni043D`. Current structural, component, and required-counter defects still block Pass.
+Intentional filled counters were permitted for `asterisk`, `uni041D`,
+`uni0427`, and `uni043D` during that review stage.
 
 ## Bold v4.1 triage
 
