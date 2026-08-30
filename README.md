@@ -28,6 +28,14 @@ verification procedure.
 - `fontforge/bold-v6.sfd` — historical pre-final Bold v6 candidate (version 1.003)
 - `fontforge/italic-review.sfd` — immutable exact-SVG Italic review baseline
 - `fontforge/italic-v2-review.sfd` — hybrid Italic candidate with 15 fidelity-approved compact glyphs
+- `fontforge/italic-v4-redraw-review.sfd` — frozen Italic v4 checkpoint
+- `fontforge/italic-v5-redraw-review.sfd` — isolated ≤100-editable-point Italic v5 review candidate
+- `fontforge/italic-v6-redraw-review.sfd` — frozen Italic v6 checkpoint
+- `fontforge/italic-v7-redraw-review.sfd` — current localized-repair Italic v7 review candidate
+- `output/font/OlesuasHand-Italic-v4-redraw-review.ttf` — frozen Italic v4 preview font
+- `output/font/OlesuasHand-Italic-v5-redraw-review.ttf` — matching Italic v5 preview font
+- `output/font/OlesuasHand-Italic-v6-redraw-review.ttf` — matching Italic v6 preview font
+- `output/font/OlesuasHand-Italic-v7-redraw-review.ttf` — matching Italic v7 preview font
 - `output/font/OlesuasHand-Italic-v2-review.ttf` — matching Italic v2 preview font
 - `qa/assets/redrawn.ttf` and `bold-v6.ttf` — historical Regular/Bold v6 QA builds
 - `checkpoints/bold-v2-reviewed/` — preserved reviewed Bold v2 and its decisions
@@ -41,6 +49,8 @@ The family contains 340 serialized glyphs: 334 outlined glyphs and six empty/con
 The Italic importer pairs pressure-sensitive XOPP centreline strokes with the 12 exported SVG pages. The SVG outlines remain the fidelity reference and safe fallback. Full-family measurement showed that XOPP-first fitting safely reduced only 15 of 333 drawn glyphs, so exact SVG remains the production default.
 
 The 15 passing candidates are isolated in `fontforge/italic-v2-review.sfd` for manual inspection; every other glyph is unchanged from `fontforge/italic-review.sfd`. Scope, hashes, point-count results, and validation are recorded in `output/italic-v2/manifest.json` and `output/italic-v2/README.md`.
+
+Italic v7 preserves the committed v6 checkpoint and changes seven glyph slots. `Beta` and `uni0412` share one exact canonical outline; `S` preserves its terminal detail; `six` uses longer outer cubic spans; `uni0416` receives a local protected-corner junction repair; `uni042A` aligns handles only on its top loop; and `uni042B` combines a path-preserved left half with the approved `l` on the right. The result contains 27,791 editable points (91.08% fewer than v2), retains the 100-point ceiling, and leaves 327 unchanged decisions valid. Run `fontforge -lang=py -script tools/redraw_italic_v7.py --workers 8`, verify with `fontforge -lang=py -script tools/verify_italic_v7.py`, then review v2 against the actual v7 TTF at `http://127.0.0.1:8015/`.
 
 Start the reviewer with `python tools\serve_italic_qa.py`, then open [http://127.0.0.1:8015/](http://127.0.0.1:8015/). Opening `qa/italic.html` directly is supported for read-only review; saving decisions requires the server. See `ITALIC_WORKFLOW.md` for build, comparison, acceptance, and verification commands.
 

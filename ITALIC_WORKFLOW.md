@@ -86,6 +86,46 @@ manual inspection boundary.
 
 ## Reviewing every glyph
 
+### Italic v8 hybrid centerline/detail redraw
+
+The accepted v2 geometry is redrawn without modifying either earlier Italic source. Build and verify the isolated candidate with:
+
+Each newly generated Italic variation receives the next whole-number version (v8, v9, and so on). Decimal or point-release candidate names are not used.
+
+```bash
+fontforge -lang=py -script tools/redraw_italic_v8.py --workers 8
+fontforge -lang=py -script tools/verify_italic_v8.py
+```
+
+Every non-empty editable SFD glyph is capped at 100 points. v8 changes six slots: shared `Beta`/`uni0412`, `S`, `six`, `uni0416`, and `uni042A`. `S` and `six` are rebuilt from smoothed XOPP centerlines with coupled stroke boundaries; junction and loop glyphs use adaptive source fitting with explicitly protected detail anchors and local cubic repairs. The report and family registry are stored under `output/italic-v8-redraw/`.
+
+The v8 QA page shows exactly the accepted v2 source and the actual v8 TTF outline on a shared 1,443-unit vertical viewport, so descenders and overlays remain visible and aligned. Decisions are bound to the v2 source hash and actual v8 TTF outline hash. Saving a decision propagates the lowest tier to registered identical Latin/Cyrillic/Greek forms. Finalization refuses any missing, non-pass, or stale decision:
+
+```bash
+fontforge -lang=py -script tools/redraw_italic_v8.py --finalize
+```
+
+### Italic v9 feedback-directed redraw
+
+v9 is built from the reviewed v8 candidate and changes only the 15 glyphs
+identified in the v8 review. Exact donor copies are used for equivalent
+Latin/Cyrillic/Greek forms. Structural glyphs use protected-detail ladders or
+clean earlier donors instead of fixed whole-contour simplification. The
+seven-eighths glyph uses the selected v5 outline: its seven, fraction slash,
+lower loop, counters, and all on-curve coordinates are preserved, while only
+the top-apex handles of the 8 are aligned.
+
+```sh
+fontforge -lang=py -script tools/redraw_italic_v9.py --workers 8
+fontforge -lang=py -script tools/verify_italic_v9.py
+python3 tools/serve_italic_qa.py
+```
+
+The v9 QA page compares the accepted v2 source with the actual v9 TTF outline.
+It inherits decisions only when both bound hashes are unchanged; all 15 changed
+slots return to unreviewed. v9 remains an uncommitted review candidate until
+the next QA round is complete.
+
 Start the local Italic reviewer:
 
 ```powershell

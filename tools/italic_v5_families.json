@@ -1,0 +1,251 @@
+{
+  "version": "olesuas-hand-italic-v5-families-v1",
+  "families": [
+    {
+      "name": "comma-quotes",
+      "donor": "quotesinglbase",
+      "members": {
+        "quoteleft": "best-orientation",
+        "quoteright": "best-orientation",
+        "quotereversed": "best-orientation",
+        "quotedblleft": "best-oriented-repeat",
+        "quotedblright": "best-oriented-repeat",
+        "quotedblbase": "best-oriented-repeat",
+        "uni201F": "best-oriented-repeat"
+      }
+    },
+    {
+      "name": "straight-quotes",
+      "donor": "minute",
+      "members": {
+        "minute": "register",
+        "quotesingle": "best-orientation",
+        "quotedbl": "best-oriented-repeat",
+        "second": "best-oriented-repeat"
+      }
+    },
+    {
+      "name": "guillemets-left",
+      "donor": "guilsinglleft",
+      "members": {
+        "guillemotleft": "repeat-components"
+      }
+    },
+    {
+      "name": "guillemets-right",
+      "donor": "guilsinglright",
+      "members": {
+        "guillemotright": "repeat-components"
+      }
+    },
+    {
+      "name": "single-arrows",
+      "donor": "arrowleft",
+      "members": {
+        "arrowright": "flip-x",
+        "arrowup": "rotate-cw",
+        "arrowdown": "rotate-ccw"
+      }
+    },
+    {
+      "name": "double-arrows",
+      "donor": "arrowdblleft",
+      "members": {
+        "arrowdblright": "flip-x",
+        "arrowdblup": "rotate-cw",
+        "arrowdbldown": "rotate-ccw"
+      }
+    },
+    {
+      "name": "diagonal-arrows",
+      "donor": "uni2196",
+      "members": {
+        "uni2197": "flip-x",
+        "uni2198": "rotate-180",
+        "uni2199": "flip-y"
+      }
+    },
+    {
+      "name": "small-digits",
+      "donor": "uni2070",
+      "members": {
+        "uni2080": "register"
+      }
+    },
+    {
+      "name": "small-one",
+      "donor": "uni00B9",
+      "members": {
+        "uni2081": "register"
+      }
+    },
+    {
+      "name": "small-two",
+      "donor": "uni00B2",
+      "members": {
+        "uni2082": "register"
+      }
+    },
+    {
+      "name": "small-three",
+      "donor": "uni00B3",
+      "members": {
+        "uni2083": "register"
+      }
+    },
+    {
+      "name": "small-four",
+      "donor": "uni2074",
+      "members": {
+        "uni2084": "register"
+      }
+    },
+    {
+      "name": "small-five",
+      "donor": "uni2075",
+      "members": {
+        "uni2085": "register"
+      }
+    },
+    {
+      "name": "small-six",
+      "donor": "uni2076",
+      "members": {
+        "uni2086": "register"
+      }
+    },
+    {
+      "name": "small-seven",
+      "donor": "uni2077",
+      "members": {
+        "uni2087": "register"
+      }
+    },
+    {
+      "name": "small-eight",
+      "donor": "uni2078",
+      "members": {
+        "uni2088": "register"
+      }
+    },
+    {
+      "name": "small-nine",
+      "donor": "uni2079",
+      "members": {
+        "uni2089": "register"
+      }
+    },
+    {
+      "name": "small-plus",
+      "donor": "uni207A",
+      "members": {
+        "uni208A": "register"
+      }
+    },
+    {
+      "name": "small-minus",
+      "donor": "uni207B",
+      "members": {
+        "uni208B": "register"
+      }
+    },
+    {
+      "name": "small-equal",
+      "donor": "uni207C",
+      "members": {
+        "uni208C": "register"
+      }
+    },
+    {
+      "name": "small-left-parenthesis",
+      "donor": "uni207D",
+      "members": {
+        "uni208D": "register"
+      }
+    },
+    {
+      "name": "small-right-parenthesis",
+      "donor": "uni207E",
+      "members": {
+        "uni208E": "register"
+      }
+    },
+    {
+      "name": "round-marks",
+      "donor": "periodcentered",
+      "members": {
+        "period": "register",
+        "bullet": "register",
+        "uni2219": "register",
+        "degree": "register"
+      }
+    },
+    {
+      "name": "latin-cyrillic-greek-a",
+      "donor": "A",
+      "members": {
+        "Alpha": "register",
+        "uni0410": "register"
+      }
+    },
+    {
+      "name": "latin-cyrillic-greek-e",
+      "donor": "E",
+      "members": {
+        "Epsilon": "register",
+        "uni0415": "register"
+      }
+    },
+    {
+      "name": "latin-cyrillic-greek-k",
+      "donor": "K",
+      "members": {
+        "Kappa": "register",
+        "uni041A": "register"
+      }
+    },
+    {
+      "name": "latin-cyrillic-greek-m",
+      "donor": "M",
+      "members": {
+        "Mu": "register",
+        "uni041C": "register"
+      }
+    },
+    {
+      "name": "latin-cyrillic-o",
+      "donor": "O",
+      "members": {
+        "Omicron": "register",
+        "uni041E": "register"
+      }
+    },
+    {
+      "name": "latin-cyrillic-greek-t",
+      "donor": "T",
+      "members": {
+        "Tau": "register",
+        "uni0422": "register"
+      }
+    },
+    {
+      "name": "latin-cyrillic-x",
+      "donor": "X",
+      "members": {
+        "Chi": "register",
+        "uni0425": "register"
+      }
+    }
+  ],
+  "fractions": {
+    "onequarter": ["uni00B9", "slash", "uni2084"],
+    "onehalf": ["uni00B9", "slash", "uni2082"],
+    "threequarters": ["uni00B3", "slash", "uni2084"],
+    "onethird": ["uni00B9", "slash", "uni2083"],
+    "twothirds": ["uni00B2", "slash", "uni2083"],
+    "oneeighth": ["uni00B9", "slash", "uni2088"],
+    "threeeighths": ["uni00B3", "slash", "uni2088"],
+    "fiveeighths": ["uni2075", "slash", "uni2088"],
+    "seveneighths": ["uni2077", "slash", "uni2088"]
+  }
+}

@@ -4,3 +4,9 @@ tools/__pycache__/
 checkpoints/*-work/
 qa/*-work/
 qa/bold-v4-percent-union/
+output/italic-v4-redraw/workers/
+output/italic-v5-redraw/workers/
+output/italic-v6-redraw/workers/
+output/italic-v7-redraw/workers/
+output/italic-v8-redraw/workers/
+output/italic-v9-redraw/workers/

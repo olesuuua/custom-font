@@ -9,8 +9,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT = ROOT / "output" / "italic-import" / "italic-glyph-report.csv"
-DECISIONS = ROOT / "qa" / "italic-manual-decisions.json"
+REPORT = ROOT / "output" / "italic-v10-redraw" / "italic-v10-glyph-report.csv"
+DECISIONS = ROOT / "qa" / "italic-v10-manual-decisions.json"
 OUTPUT = ROOT / "qa" / "assets" / "italic-report.js"
 
 
@@ -20,20 +20,15 @@ def main() -> None:
     for row in rows:
         filename = f"{int(row['index']):03d}-{row['glyph']}.svg"
         row["static_source_svg"] = (
-            f"../output/italic-import/exact-source-glyph-svg/{filename}"
+            f"../output/italic-v10-redraw/v2-source-glyph-svg/{filename}"
             if row.get("source_svg") else ""
         )
         row["static_candidate_svg"] = (
-            f"../output/italic-import/final-font-glyph-svg/{filename}"
+            f"../output/italic-v10-redraw/v10-final-font-glyph-svg/{filename}"
             if row.get("candidate_svg") else ""
         )
-        compact_path = ROOT / "output" / "italic-import" / "xopp-candidate-glyph-svg" / filename
-        row["static_compact_svg"] = (
-            f"../output/italic-import/xopp-candidate-glyph-svg/{filename}"
-            if compact_path.exists() else ""
-        )
     review = json.loads(DECISIONS.read_text(encoding="utf-8")) if DECISIONS.exists() else {
-        "version": "italic-manual-review-v1", "decisions": {}
+        "version": "italic-v10-manual-review-v1", "decisions": {}
     }
     payload = {"report": {"glyphs": rows}, "review": review}
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
