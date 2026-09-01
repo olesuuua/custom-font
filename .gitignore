@@ -1,6 +1,14 @@
 .font-deps/
 tools/__pycache__/
 *.log
+
+# Intermediate iteration data is archived outside the repository (2026-09-01).
+# Kept exceptions are tracked explicitly: qa/assets/*-final*, output/pdf/.
+checkpoints/
+fontforge/
+output/
+qa/
+tmp/
 checkpoints/*-work/
 qa/*-work/
 qa/bold-v4-percent-union/
