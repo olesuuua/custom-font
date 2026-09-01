@@ -23,6 +23,8 @@ contents and verification procedure.
 - `qa/assets/regular-final.ttf` — completed installable Regular font
 - `qa/assets/bold-final.ttf` — completed installable Bold font
 - `qa/assets/italic-final.ttf` — completed installable Italic font
+- `release/OlesuasHand-Final.zip` — ready-to-install package containing all
+  three final styles
 - `italic-manual-fixed-v4.sfd` — preserved approved manual Italic release input
 - `fontforge/redrawn.sfd` — preserved Regular build input (weight 400; never cleaned in place)
 - `fontforge/regular-bold-base.sfd` — overlap-cleaned copy used only as the Bold source

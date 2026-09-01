@@ -18,6 +18,11 @@ preserve this release and create a separately versioned successor.
 The SFD files are the archival release masters. The TTF files are generated
 from those final masters and are the versions used by the sentence QA page.
 
+The ready-to-install three-style family is also available in
+`release/OlesuasHand/` and as `release/OlesuasHand-Final.zip`. Recreate that
+package without modifying the final masters by running
+`python tools/package_final_family.py`.
+
 `bold-manual.sfd`, `fontforge/redrawn.sfd`, and
 `italic-manual-fixed-v4.sfd` are preserved build inputs and development
 history. They are not the release fonts and should not replace the `*-final`

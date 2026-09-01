@@ -1,0 +1,27 @@
+{
+  "family": "Olesuas Hand",
+  "status": "final",
+  "styles": [
+    {
+      "style": "Regular",
+      "file": "OlesuasHand-Regular.ttf",
+      "source": "qa/assets/regular-final.ttf",
+      "sha256": "de2b3d10eb4e000bd79a95f50ded09ea94edea194bdadca84263579dabab6ada",
+      "bytes": 136716
+    },
+    {
+      "style": "Bold",
+      "file": "OlesuasHand-Bold.ttf",
+      "source": "qa/assets/bold-final.ttf",
+      "sha256": "955b9c2d3c44e93e0608083befa4ed2da424c59f3ff66ec11fb65807a52f9dae",
+      "bytes": 249108
+    },
+    {
+      "style": "Italic",
+      "file": "OlesuasHand-Italic.ttf",
+      "source": "qa/assets/italic-final.ttf",
+      "sha256": "09b3646b7bc7f188c7521026bae7003f3fea542f23487ccfc1b7a98e3b037ca9",
+      "bytes": 360672
+    }
+  ]
+}

@@ -30,6 +30,16 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def matches_recorded_hash(path: Path, expected: str) -> bool:
+    """Accept SFD hashes across Git's LF/CRLF checkout normalization."""
+    raw = path.read_bytes()
+    candidates = [raw]
+    if path.suffix.lower() == ".sfd":
+        lf = raw.replace(b"\r\n", b"\n")
+        candidates.extend((lf, lf.replace(b"\n", b"\r\n")))
+    return expected in {hashlib.sha256(data).hexdigest() for data in candidates}
+
+
 def points(glyph):
     return [[(point.x, point.y, point.on_curve) for point in contour] for contour in glyph.foreground]
 
@@ -87,16 +97,14 @@ def main() -> int:
     for path in (REGULAR_SOURCE, BOLD_SOURCE, REGULAR_FINAL, BOLD_FINAL, REGULAR_TTF, BOLD_TTF, REPORT, SPECIMENS):
         assert path.is_file(), path
     report = json.loads(REPORT.read_text(encoding="utf-8"))
-    assert report["source_hashes"] == {
-        "regular": sha256(REGULAR_SOURCE),
-        "bold": sha256(BOLD_SOURCE),
-    }
-    assert report["output_hashes"] == {
-        "regular_sfd": sha256(REGULAR_FINAL),
-        "bold_sfd": sha256(BOLD_FINAL),
-        "regular_ttf": sha256(REGULAR_TTF),
-        "bold_ttf": sha256(BOLD_TTF),
-    }
+    recorded_sources = report["source_hashes"]
+    assert matches_recorded_hash(REGULAR_SOURCE, recorded_sources["regular"])
+    assert matches_recorded_hash(BOLD_SOURCE, recorded_sources["bold"])
+    recorded_outputs = report["output_hashes"]
+    assert matches_recorded_hash(REGULAR_FINAL, recorded_outputs["regular_sfd"])
+    assert matches_recorded_hash(BOLD_FINAL, recorded_outputs["bold_sfd"])
+    assert matches_recorded_hash(REGULAR_TTF, recorded_outputs["regular_ttf"])
+    assert matches_recorded_hash(BOLD_TTF, recorded_outputs["bold_ttf"])
 
     regular = fontforge.open(str(REGULAR_FINAL))
     bold = fontforge.open(str(BOLD_FINAL))
