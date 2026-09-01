@@ -1,5 +1,18 @@
 # Olesuas Hand Italic drawing workflow
 
+## Final release
+
+Italic is finalized. The immutable release master is `italic-final.sfd`, and
+the installable build is `qa/assets/italic-final.ttf`. The approved manual input
+is preserved as `italic-manual-fixed-v4.sfd`; do not edit the `*-final` files in
+place. Verify the release with:
+
+```bash
+fontforge -lang=py -script tools/verify_italic_final.py
+```
+
+The remaining workflow is retained as development history.
+
 The generated template contains 334 review slots. The 333 handwritten outlines come from the exported page SVGs; `.notdef` is preserved from Regular. Six empty/control glyphs remain empty.
 
 ## Drawing in Xournal++

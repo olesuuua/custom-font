@@ -1,26 +1,29 @@
 # Olesuas Hand
 
-A custom handwritten font family with completed Regular and Bold styles and a
-separate Italic drawing/review workflow.
+A custom handwritten font family with completed Regular, Bold, and Italic
+styles.
 
 ## Final release status
 
-**Regular and Bold are finalized and approved. No further drawing, spacing, or
-kerning changes are required.** The release masters are `regular-final.sfd` and
-`bold-final.sfd`; the installable builds are `qa/assets/regular-final.ttf` and
-`qa/assets/bold-final.ttf`.
+**Regular, Bold, and Italic are finalized and approved. No further drawing,
+spacing, or kerning changes are required.** The release masters are
+`regular-final.sfd`, `bold-final.sfd`, and `italic-final.sfd`; the installable
+builds use the corresponding `*-final.ttf` names under `qa/assets/`.
 
-Treat these four files as the immutable completed release. Earlier `redrawn`,
-`bold-v6`, and `bold-manual` files remain only as development history or build
-inputs. See [FINAL_FONTS.md](FINAL_FONTS.md) for the release contents and
-verification procedure.
+Treat these six files as the immutable completed release. Earlier `redrawn`,
+`bold-v6`, `bold-manual`, and Italic review files remain only as development
+history or build inputs. See [FINAL_FONTS.md](FINAL_FONTS.md) for the release
+contents and verification procedure.
 
 ## Font files
 
 - `regular-final.sfd` — completed Regular release master; no changes needed
 - `bold-final.sfd` — completed Bold release master; no changes needed
+- `italic-final.sfd` — completed Italic release master; no changes needed
 - `qa/assets/regular-final.ttf` — completed installable Regular font
 - `qa/assets/bold-final.ttf` — completed installable Bold font
+- `qa/assets/italic-final.ttf` — completed installable Italic font
+- `italic-manual-fixed-v4.sfd` — preserved approved manual Italic release input
 - `fontforge/redrawn.sfd` — preserved Regular build input (weight 400; never cleaned in place)
 - `fontforge/regular-bold-base.sfd` — overlap-cleaned copy used only as the Bold source
 - `fontforge/bold-raw.sfd` — untouched +40 diagnostic
@@ -31,7 +34,7 @@ verification procedure.
 - `fontforge/italic-v4-redraw-review.sfd` — frozen Italic v4 checkpoint
 - `fontforge/italic-v5-redraw-review.sfd` — isolated ≤100-editable-point Italic v5 review candidate
 - `fontforge/italic-v6-redraw-review.sfd` — frozen Italic v6 checkpoint
-- `fontforge/italic-v7-redraw-review.sfd` — current localized-repair Italic v7 review candidate
+- `fontforge/italic-v7-redraw-review.sfd` — historical localized-repair Italic v7 review candidate
 - `output/font/OlesuasHand-Italic-v4-redraw-review.ttf` — frozen Italic v4 preview font
 - `output/font/OlesuasHand-Italic-v5-redraw-review.ttf` — matching Italic v5 preview font
 - `output/font/OlesuasHand-Italic-v6-redraw-review.ttf` — matching Italic v6 preview font
@@ -42,11 +45,18 @@ verification procedure.
 - `checkpoints/bold-v3-reviewed/` — preserved fully reviewed Bold v3 and its decisions
 - `checkpoints/bold-v4/` — frozen verified Bold v4 sources, reports, decisions, and settings
 
-The family contains 340 serialized glyphs: 334 outlined glyphs and six empty/control glyphs.
+The final release contains 342 serialized glyphs in Regular and Italic and 341
+in Bold. Every style includes the shared encoded repertoire, blank U+0020
+SPACE, and the U+2126 OHM SIGN compatibility glyph.
 
-## Italic drawing and review
+## Historical Italic drawing and review
 
-The Italic importer pairs pressure-sensitive XOPP centreline strokes with the 12 exported SVG pages. The SVG outlines remain the fidelity reference and safe fallback. Full-family measurement showed that XOPP-first fitting safely reduced only 15 of 333 drawn glyphs, so exact SVG remains the production default.
+This workflow produced the completed `italic-final.sfd` release and is retained
+as build history. The Italic importer pairs pressure-sensitive XOPP centreline
+strokes with the 12 exported SVG pages. The SVG outlines remain the fidelity
+reference and safe fallback. Full-family measurement showed that XOPP-first
+fitting safely reduced only 15 of 333 drawn glyphs, so exact SVG remained the
+production default during development.
 
 The 15 passing candidates are isolated in `fontforge/italic-v2-review.sfd` for manual inspection; every other glyph is unchanged from `fontforge/italic-review.sfd`. Scope, hashes, point-count results, and validation are recorded in `output/italic-v2/manifest.json` and `output/italic-v2/README.md`.
 
@@ -70,7 +80,7 @@ python tools\migrate_bold_v6_decisions.py
 The historical guarded review server can be started with
 `./tools/start_bold_qa.ps1`, using `-ReplaceProjectServer` when it identifies an
 older server from this project. The active `qa/index.html` now shows final
-Regular/Bold sentence specimens instead of glyph review controls.
+Regular/Bold/Italic sentence specimens instead of glyph review controls.
 
 The page shows only untouched Regular, current full Bold v6, and an optional overlay. Search, review state, glyph category, and the compact issue filter remain available. Historical raw, base, pilot, and batch fonts are retained only in checkpoints and are not loaded by the active page.
 
